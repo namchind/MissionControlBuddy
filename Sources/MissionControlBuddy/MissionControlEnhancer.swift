@@ -21,6 +21,12 @@ final class MissionControlEnhancer {
     private var suppressedUntilMCClosed = false
     private var mouseMonitor: Any?
 
+    /// Signature of the last-seen thumbnail layout. Used to detect whether the
+    /// thumbnails are STABLE (settled) vs animating (opening/closing). We only
+    /// draw when stable — this kills the bottom-left blip during the close
+    /// animation, regardless of how MC was dismissed (click, swipe, keyboard).
+    private var lastLayoutSignature: String?
+
     private(set) var isEnabled = true
 
     // MARK: - Lifecycle
@@ -71,6 +77,17 @@ final class MissionControlEnhancer {
 
         guard let thumbnails = DockAXReader.currentThumbnails(), !thumbnails.isEmpty else {
             if isShowingOverlays { hideAllOverlays() }
+            lastLayoutSignature = nil
+            return
+        }
+
+        // Stability gate: if the layout changed since last tick, the thumbnails
+        // are animating (opening or tearing down). Hide overlays and wait for
+        // them to settle before drawing. This removes the corner-blip glitch.
+        let signature = layoutSignature(thumbnails)
+        defer { lastLayoutSignature = signature }
+        guard signature == lastLayoutSignature else {
+            if isShowingOverlays { hideAllOverlays() }
             return
         }
 
@@ -81,6 +98,14 @@ final class MissionControlEnhancer {
         }
 
         render(thumbnails)
+    }
+
+    /// A cheap fingerprint of the current thumbnail layout (titles + rounded
+    /// frames). Identical across two ticks == thumbnails have settled.
+    private func layoutSignature(_ thumbnails: [Thumbnail]) -> String {
+        thumbnails
+            .map { "\($0.title)@\(Int($0.axFrame.origin.x)),\(Int($0.axFrame.origin.y)),\(Int($0.axFrame.width)),\(Int($0.axFrame.height))" }
+            .joined(separator: "|")
     }
 
     // MARK: - Rendering (reuses pooled windows)
