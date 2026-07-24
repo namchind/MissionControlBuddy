@@ -3,91 +3,73 @@ import AppKit
 @MainActor
 final class StatusBarController: NSObject {
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-    private let popover = NSPopover()
-    private let windowListController = WindowListViewController()
+    private let enhancer: MissionControlEnhancer
 
-    private var refreshTimer: Timer?
-
-    override init() {
+    init(enhancer: MissionControlEnhancer) {
+        self.enhancer = enhancer
         super.init()
         setupStatusBarButton()
-        setupPopover()
     }
-
 
     private func setupStatusBarButton() {
         guard let button = statusItem.button else { return }
-
         button.image = NSImage(systemSymbolName: "rectangle.3.group.bubble.left", accessibilityDescription: "Mission Control Buddy")
         button.image?.isTemplate = true
-        button.toolTip = "Mission Control Buddy"
-        button.target = self
-        button.action = #selector(togglePopover)
-        button.sendAction(on: [.leftMouseUp, .rightMouseUp])
+        button.toolTip = "Mission Control Buddy — enhances native Mission Control"
+        rebuildMenu()
     }
 
-    private func setupPopover() {
-        popover.contentSize = NSSize(width: 560, height: 480)
-        popover.behavior = .transient
-        popover.contentViewController = windowListController
-
-        windowListController.onRequestClose = { [weak self] in
-            self?.popover.performClose(nil)
-            self?.stopRefreshing()
-        }
-    }
-
-    @objc private func togglePopover(_ sender: NSStatusBarButton) {
-        guard let event = NSApp.currentEvent else { return }
-
-        if event.type == .rightMouseUp {
-            showContextMenu(from: sender)
-            return
-        }
-
-        if popover.isShown {
-            popover.performClose(sender)
-            stopRefreshing()
-        } else {
-            windowListController.refresh()
-            popover.show(relativeTo: sender.bounds, of: sender, preferredEdge: .minY)
-            startRefreshing()
-        }
-    }
-
-    private func showContextMenu(from button: NSStatusBarButton) {
+    private func rebuildMenu() {
         let menu = NSMenu()
 
-        let refreshItem = NSMenuItem(title: "Refresh Windows", action: #selector(refreshNow), keyEquivalent: "r")
-        refreshItem.target = self
-        menu.addItem(refreshItem)
+        let toggleTitle = enhancer.isEnabled ? "Disable Overlays" : "Enable Overlays"
+        let toggleItem = NSMenuItem(title: toggleTitle, action: #selector(toggleEnabled), keyEquivalent: "")
+        toggleItem.target = self
+        menu.addItem(toggleItem)
+
+        let statusItemLabel = NSMenuItem(
+            title: enhancer.isEnabled ? "Status: watching Mission Control" : "Status: paused",
+            action: nil,
+            keyEquivalent: ""
+        )
+        statusItemLabel.isEnabled = false
+        menu.addItem(statusItemLabel)
 
         menu.addItem(NSMenuItem.separator())
+
+        let aboutItem = NSMenuItem(title: "About", action: #selector(showAbout), keyEquivalent: "")
+        aboutItem.target = self
+        menu.addItem(aboutItem)
 
         let quitItem = NSMenuItem(title: "Quit MissionControlBuddy", action: #selector(quit), keyEquivalent: "q")
         quitItem.target = self
         menu.addItem(quitItem)
 
         statusItem.menu = menu
-        button.performClick(nil)
-        statusItem.menu = nil
     }
 
-    @objc private func refreshNow() {
-        windowListController.refresh()
+    @objc private func toggleEnabled() {
+        enhancer.setEnabled(!enhancer.isEnabled)
+        rebuildMenu()
+    }
+
+    @objc private func showAbout() {
+        let alert = NSAlert()
+        alert.messageText = "Mission Control Buddy"
+        alert.informativeText = """
+        Enhances the native macOS Mission Control (Control+Up / swipe up) by \
+        overlaying each window thumbnail with its app icon, app name, and window title.
+
+        Requires Accessibility permission (System Settings → Privacy & Security → Accessibility).
+
+        Note: this relies on the Dock's Accessibility tree and floats overlays at a \
+        high window level. It's experimental and may need tweaks across macOS versions.
+        """
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
     }
 
     @objc private func quit() {
         NSApp.terminate(nil)
-    }
-
-    private func startRefreshing() {
-        stopRefreshing()
-        refreshTimer = Timer.scheduledTimer(timeInterval: 2.0, target: self, selector: #selector(refreshNow), userInfo: nil, repeats: true)
-    }
-
-    private func stopRefreshing() {
-        refreshTimer?.invalidate()
-        refreshTimer = nil
     }
 }

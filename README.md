@@ -1,24 +1,38 @@
 # MissionControlBuddy
 
-MissionControlBuddy is a native macOS menu bar app that makes Mission Control easier to scan.
+**Enhances the *native* macOS Mission Control** (Control+Up / swipe-up) by overlaying
+each window thumbnail with its **app icon, app name, and window title** — so you can
+find the window you want at a glance.
 
-It adds:
-- App icons
-- App names
-- Window titles
-- Display labels
-- Search-as-you-type filtering
-- One-click activation of the selected window/app
+This is **not** a Mission Control clone. It watches for the real, Apple-provided
+Mission Control and draws labels on top of the actual thumbnails.
 
-## Why this exists
+## How it works (and why it works)
 
-Mission Control is great, but when you have a lot of windows, finding the right one can get messy.
-MissionControlBuddy gives you a compact, searchable, icon-rich view from the menu bar.
+Two diagnostic probes established what's possible on this machine:
+
+- `MissionControlProbe.swift` — proved the thumbnails are **not** separate windows
+  in the public window list (they're painted inside one big Dock window).
+- `MissionControlAXProbe.swift` — proved the Dock exposes every thumbnail as an
+  `AXButton` (with a rectangle + window title) under an `AXGroup` titled
+  `"Mission Control"` in its **Accessibility tree**. ✅
+
+So the app:
+
+1. Polls the Dock's Accessibility tree (~7x/sec).
+2. When the `"Mission Control"` group appears, reads all thumbnail buttons
+   (rect + title).
+3. Resolves each title → owning app → **icon + name** (by reading each running
+   app's AX window titles — no Screen Recording permission required).
+4. Parks a **borderless, click-through** overlay chip on each thumbnail at a high
+   window level so it floats above Mission Control.
+5. Tears the overlays down when Mission Control closes.
 
 ## Requirements
 
 - macOS 13+
-- Swift 6 toolchain (Xcode command line tools)
+- Swift 6 toolchain
+- **Accessibility permission** (required — that's how we read the thumbnails)
 
 ## Run
 
@@ -27,26 +41,31 @@ cd MissionControlBuddy
 swift run
 ```
 
-The app runs as a menu bar utility (`NSApplication` with accessory activation policy).
+Grant Accessibility when prompted (System Settings → Privacy & Security →
+Accessibility → enable this app, or your terminal if running via `swift run`),
+then relaunch. Trigger Mission Control (Control+Up or swipe up) and the labels
+should appear.
 
-## Usage
+The menu bar icon lets you toggle overlays on/off and quit.
 
-1. Click the menu bar icon.
-2. Type in the search bar to filter by app name or window title.
-3. Double-click a row to activate that app/window.
-4. Right-click the menu bar icon for refresh and quit options.
+## ⚠️ Experimental caveats
 
-## Accessibility permission (optional but recommended)
+- Floating above Mission Control uses a high window level
+  (`.assistiveTechHighWindow`). If overlays don't appear on top on your macOS
+  version, this is the knob to tweak (see `ThumbnailOverlay.swift`).
+- Relies on the Dock's Accessibility structure, which Apple can change between
+  macOS releases.
+- Personal-use / unsigned utility.
 
-The app can still list windows without Accessibility privileges.
-For best window raise/focus behavior, grant Accessibility access:
+## Project layout
 
-- System Settings → Privacy & Security → Accessibility
-- Add/enable the app or terminal used to run `swift run`
-
-## Tech notes
-
-- Window discovery: `CGWindowListCopyWindowInfo`
-- App metadata + icons: `NSRunningApplication`
-- Window focusing: Accessibility API (`AXUIElement`), when trusted
-- UI: AppKit (`NSStatusItem`, `NSPopover`, `NSTableView`)
+| File | Role |
+|------|------|
+| `DockAXReader.swift` | Reads MC thumbnails from the Dock AX tree |
+| `IconResolver.swift` | Maps thumbnail title → app icon + name |
+| `ThumbnailOverlay.swift` | The borderless click-through label window |
+| `MissionControlEnhancer.swift` | Watcher + overlay lifecycle + coordinate flip |
+| `StatusBarController.swift` | Menu bar UI (toggle / about / quit) |
+| `AppDelegate.swift` | Startup + Accessibility prompt |
+| `MissionControlProbe.swift` | Diagnostic #1 (window list) |
+| `MissionControlAXProbe.swift` | Diagnostic #2 (AX tree) |
