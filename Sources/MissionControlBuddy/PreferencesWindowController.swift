@@ -18,7 +18,7 @@ final class PreferencesWindowController: NSWindowController {
 
     convenience init() {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 420, height: 320),
+            contentRect: NSRect(x: 0, y: 0, width: 420, height: 360),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
@@ -90,6 +90,16 @@ final class PreferencesWindowController: NSWindowController {
             grid.trailingAnchor.constraint(lessThanOrEqualTo: content.trailingAnchor, constant: -24),
             grid.topAnchor.constraint(equalTo: content.topAnchor, constant: 24)
         ])
+
+        let resetButton = NSButton(title: "Restore Defaults", target: self, action: #selector(resetToDefaults))
+        resetButton.bezelStyle = .rounded
+        resetButton.translatesAutoresizingMaskIntoConstraints = false
+        content.addSubview(resetButton)
+
+        NSLayoutConstraint.activate([
+            resetButton.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 24),
+            resetButton.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -18)
+        ])
     }
 
     private func label(_ text: String) -> NSTextField {
@@ -150,5 +160,10 @@ final class PreferencesWindowController: NSWindowController {
             loginNoteLabel.stringValue = "Couldn't change login item — run the built .app (see README)."
             loginNoteLabel.textColor = .systemRed
         }
+    }
+
+    @objc private func resetToDefaults() {
+        prefs.resetToDefaults()
+        loadValues()
     }
 }

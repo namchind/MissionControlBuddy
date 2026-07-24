@@ -84,6 +84,7 @@ mode — use Option A for that.
 | **Opacity** | Chip background opacity (0–100%) |
 | **Long text** | `Cut with …` (truncate) or `Wrap (2 lines)` |
 | **Launch at login** | Start automatically at login (app bundle only) |
+| **Restore Defaults** | Reset all settings back to defaults |
 
 Changes apply live to the next Mission Control open.
 
@@ -138,4 +139,5 @@ So the app:
 | `StatusBarController.swift` | Menu bar UI |
 | `AppDelegate.swift` | Startup + Accessibility prompt |
 | `build_app.sh` | Builds/install the `.app` bundle |
+| `make_icon.swift` | Generates `Resources/AppIcon.icns` |
 | `*Probe.swift` | Diagnostics used to reverse-engineer MC |

@@ -70,6 +70,14 @@ final class PreferencesStore {
         (NSColor(hex: backgroundHex) ?? .black).withAlphaComponent(CGFloat(backgroundOpacity))
     }
 
+    /// Restore every setting to its default value.
+    func resetToDefaults() {
+        for key in [Key.chipScale, Key.backgroundHex, Key.backgroundOpacity, Key.longText] {
+            defaults.removeObject(forKey: key)
+        }
+        NotificationCenter.default.post(name: Self.changedNotification, object: nil)
+    }
+
     // MARK: - Helpers
 
     private func set(_ value: Any, forKey key: String) {
