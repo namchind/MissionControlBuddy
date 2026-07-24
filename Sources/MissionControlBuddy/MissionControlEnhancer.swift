@@ -26,6 +26,7 @@ final class MissionControlEnhancer {
     /// draw when stable — this kills the bottom-left blip during the close
     /// animation, regardless of how MC was dismissed (click, swipe, keyboard).
     private var lastLayoutSignature: String?
+    private var stableLayoutTicks = 0
 
     private(set) var isEnabled = true
 
@@ -64,7 +65,9 @@ final class MissionControlEnhancer {
         // Fast path: if MC isn't open, hide everything immediately. This is the
         // cheap top-level check, so teardown feels instant.
         guard DockAXReader.isMissionControlOpen() else {
-            if suppressedUntilMCClosed { suppressedUntilMCClosed = false }
+            suppressedUntilMCClosed = false
+            stableLayoutTicks = 0
+            lastLayoutSignature = nil
             if isShowingOverlays { hideAllOverlays() }
             return
         }
@@ -76,18 +79,33 @@ final class MissionControlEnhancer {
         }
 
         guard let thumbnails = DockAXReader.currentThumbnails(), !thumbnails.isEmpty else {
-            if isShowingOverlays { hideAllOverlays() }
+            stableLayoutTicks = 0
             lastLayoutSignature = nil
+            if isShowingOverlays { hideAllOverlays() }
             return
         }
 
-        // Stability gate: if the layout changed since last tick, the thumbnails
-        // are animating (opening or tearing down). Hide overlays and wait for
-        // them to settle before drawing. This removes the corner-blip glitch.
+        // Stability + renderability gate:
+        // - During the Mission Control open/close animation, frames change.
+        // - During the interactive partial-swipe transition, Dock may report a
+        //   stable-but-useless layout where many frames overlap/collapse near the
+        //   bottom-left corner.
+        // In both cases, we DO NOT want overlays. We only draw when the layout is
+        // stable *and* looks like the fully-open Mission Control grid.
         let signature = layoutSignature(thumbnails)
         defer { lastLayoutSignature = signature }
-        guard signature == lastLayoutSignature else {
+
+        let renderable = layoutIsRenderable(thumbnails)
+        if signature == lastLayoutSignature && renderable {
+            stableLayoutTicks = min(stableLayoutTicks + 1, 10)
+        } else {
+            stableLayoutTicks = 0
             if isShowingOverlays { hideAllOverlays() }
+            return
+        }
+
+        // Require a couple stable ticks before drawing (debounce jitter).
+        guard stableLayoutTicks >= 2 else {
             return
         }
 
@@ -100,12 +118,66 @@ final class MissionControlEnhancer {
         render(thumbnails)
     }
 
-    /// A cheap fingerprint of the current thumbnail layout (titles + rounded
-    /// frames). Identical across two ticks == thumbnails have settled.
+    /// A cheap fingerprint of the current thumbnail layout (titles + frames).
     private func layoutSignature(_ thumbnails: [Thumbnail]) -> String {
         thumbnails
             .map { "\($0.title)@\(Int($0.axFrame.origin.x)),\(Int($0.axFrame.origin.y)),\(Int($0.axFrame.width)),\(Int($0.axFrame.height))" }
             .joined(separator: "|")
+    }
+
+    /// Heuristic: returns true only when the layout looks like the fully-open
+    /// Mission Control grid. Returns false for:
+    /// - open/close animation frames
+    /// - partial swipe / interactive transition (thumbnails overlap and/or
+    ///   collapse toward the bottom-left)
+    private func layoutIsRenderable(_ thumbnails: [Thumbnail]) -> Bool {
+        guard thumbnails.count >= 2 else { return false }
+        guard let screen = NSScreen.screens.first(where: { $0.frame.origin == .zero }) ?? NSScreen.main else {
+            return false
+        }
+
+        let screenRect = screen.frame
+        let screenArea = max(1.0, screenRect.width * screenRect.height)
+
+        let frames = thumbnails.compactMap { cocoaFrame(from: $0.axFrame) }
+        guard frames.count >= 2 else { return false }
+
+        // Bounding box should cover a meaningful portion of the screen.
+        var bbox = frames[0]
+        for f in frames.dropFirst() { bbox = bbox.union(f) }
+        let bboxArea = max(1.0, bbox.width * bbox.height)
+
+        // If everything is clustered, we're likely in the transition.
+        if bboxArea / screenArea < 0.18 {
+            return false
+        }
+
+        // The bottom-left "pile" symptom: bbox hugs the bottom-left corner.
+        if bbox.minX < 80 && bbox.minY < 160 {
+            return false
+        }
+
+        // Overlap check: in real MC grid, thumbnails barely overlap. In the
+        // interactive transition they overlap heavily.
+        var heavyOverlaps = 0
+        for i in 0..<frames.count {
+            for j in (i + 1)..<frames.count {
+                let a = frames[i]
+                let b = frames[j]
+                let inter = a.intersection(b)
+                if inter.isNull { continue }
+                let interArea = inter.width * inter.height
+                let minArea = min(a.width * a.height, b.width * b.height)
+                if minArea > 0, interArea / minArea > 0.20 {
+                    heavyOverlaps += 1
+                    if heavyOverlaps >= frames.count { // plenty overlap → bail fast
+                        return false
+                    }
+                }
+            }
+        }
+
+        return true
     }
 
     // MARK: - Rendering (reuses pooled windows)
