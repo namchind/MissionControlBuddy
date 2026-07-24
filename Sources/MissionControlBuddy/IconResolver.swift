@@ -73,6 +73,16 @@ struct IconResolver {
             return resolved(app, fallbackName: title)
         }
 
+        // 2b. Short title that is a PREFIX of a real window title. Some apps
+        //     append text to their AX title that MC's thumbnail omits, e.g.
+        //     Chrome shows "Gmail" but its AX title is
+        //     "Gmail - Google Chrome - <profile>".
+        if title.count >= 3 {
+            for entry in windows where entry.title.hasPrefix(title) {
+                return resolved(entry.app, fallbackName: title)
+            }
+        }
+
         // 3. Title of the form "document — AppName": match the trailing segment.
         for separator in [" \u{2014} ", " \u{2013} ", " - "] {
             if let range = title.range(of: separator, options: .backwards) {

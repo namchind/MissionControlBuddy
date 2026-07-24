@@ -7,6 +7,7 @@ final class ThumbnailOverlayWindow: NSWindow {
     private var lastAppName: String?
     private var lastWindowTitle: String?
     private var lastIcon: NSImage?
+    private var lastStyleToken: String?
 
     init() {
         super.init(
@@ -21,110 +22,165 @@ final class ThumbnailOverlayWindow: NSWindow {
         hasShadow = false
         ignoresMouseEvents = true
 
-        // Float above Mission Control (confirmed working on the user's macOS).
         level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.assistiveTechHighWindow)))
         collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary, .ignoresCycle]
 
         contentView = ThumbnailLabelView(frame: NSRect(x: 0, y: 0, width: 10, height: 10))
     }
 
-    /// Move only when the frame actually changed — avoids redundant redraws
-    /// that cause flicker.
     func setFrameIfNeeded(_ newFrame: NSRect) {
         if frame != newFrame {
             setFrame(newFrame, display: false, animate: false)
         }
     }
 
-    /// Update content only when it changed.
-    func updateIfNeeded(icon: NSImage?, appName: String, windowTitle: String) {
-        if appName == lastAppName, windowTitle == lastWindowTitle, icon === lastIcon {
+    /// Update content and/or style only when something changed.
+    func updateIfNeeded(icon: NSImage?, appName: String, windowTitle: String, style: ChipStyle) {
+        let styleToken = style.token
+        if appName == lastAppName,
+           windowTitle == lastWindowTitle,
+           icon === lastIcon,
+           styleToken == lastStyleToken {
             return
         }
         lastAppName = appName
         lastWindowTitle = windowTitle
         lastIcon = icon
-        (contentView as? ThumbnailLabelView)?.configure(icon: icon, appName: appName, windowTitle: windowTitle)
+        lastStyleToken = styleToken
+        (contentView as? ThumbnailLabelView)?.configure(icon: icon, appName: appName, windowTitle: windowTitle, style: style)
+    }
+}
+
+/// Resolved chip appearance derived from user preferences.
+struct ChipStyle {
+    let scale: Double
+    let backgroundColor: NSColor
+    let longTextBehavior: LongTextBehavior
+
+    /// Cheap change-detection token.
+    var token: String {
+        "\(scale)|\(backgroundColor.hexString)|\(backgroundColor.alphaComponent)|\(longTextBehavior.rawValue)"
+    }
+
+    static func current() -> ChipStyle {
+        MainActor.assumeIsolated {
+            let prefs = PreferencesStore.shared
+            return ChipStyle(
+                scale: prefs.chipScale,
+                backgroundColor: prefs.backgroundColor,
+                longTextBehavior: prefs.longTextBehavior
+            )
+        }
     }
 }
 
 /// Draws a compact solid pill (icon + app name + window title) pinned to the
-/// bottom-left of the thumbnail. Solid background + text shadow keeps it
-/// readable over both light and dark window thumbnails.
+/// bottom-left of the thumbnail. Rebuilt on each configure() so size/color/wrap
+/// preferences apply cleanly.
 final class ThumbnailLabelView: NSView {
-
-    private let iconView = NSImageView()
-    private let appNameLabel = NSTextField(labelWithString: "")
-    private let titleLabel = NSTextField(labelWithString: "")
-    private let pill = NSView()
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         wantsLayer = true
-        setupSubviews()
     }
 
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
 
-    private func setupSubviews() {
+    func configure(icon: NSImage?, appName: String, windowTitle: String, style: ChipStyle) {
+        subviews.forEach { $0.removeFromSuperview() }
+
+        let scale = CGFloat(style.scale)
+        let iconSize = 28 * scale
+        let hPad = 6 * scale
+        let vPad = 4 * scale
+        let spacing = 6 * scale
+        let appFontSize = 12 * scale
+        let titleFontSize = 10 * scale
+        let inset = 6 * scale
+
+        // Chip may not exceed the thumbnail width (minus insets).
+        let maxChipWidth = max(120 * scale, bounds.width - inset * 2)
+        let maxTextWidth = max(40 * scale, maxChipWidth - iconSize - hPad * 3 - spacing)
+
+        let pill = NSView()
         pill.wantsLayer = true
-        pill.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.72).cgColor
-        pill.layer?.cornerRadius = 8
+        pill.layer?.backgroundColor = style.backgroundColor.cgColor
+        pill.layer?.cornerRadius = 8 * scale
         pill.layer?.masksToBounds = true
-        pill.translatesAutoresizingMaskIntoConstraints = false
         addSubview(pill)
 
+        let iconView = NSImageView()
+        iconView.image = icon
         iconView.imageScaling = .scaleProportionallyUpOrDown
-        iconView.translatesAutoresizingMaskIntoConstraints = false
         pill.addSubview(iconView)
 
-        configureLabel(appNameLabel, size: 12, weight: .semibold, color: .white)
-        configureLabel(titleLabel, size: 10, weight: .regular, color: NSColor.white.withAlphaComponent(0.8))
-        pill.addSubview(appNameLabel)
-        pill.addSubview(titleLabel)
+        let showTitle = !windowTitle.isEmpty && windowTitle != appName
+        let wrap = style.longTextBehavior == .wrap
 
-        NSLayoutConstraint.activate([
-            pill.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 6),
-            pill.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -6),
-            pill.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -6),
-            pill.heightAnchor.constraint(equalToConstant: 40),
+        let appLabel = makeLabel(appName, size: appFontSize, weight: .semibold,
+                                 color: .white, maxWidth: maxTextWidth,
+                                 wrap: wrap, maxLines: wrap ? 2 : 1)
+        pill.addSubview(appLabel)
 
-            iconView.leadingAnchor.constraint(equalTo: pill.leadingAnchor, constant: 6),
-            iconView.centerYAnchor.constraint(equalTo: pill.centerYAnchor),
-            iconView.widthAnchor.constraint(equalToConstant: 28),
-            iconView.heightAnchor.constraint(equalToConstant: 28),
+        var titleLabel: NSTextField?
+        if showTitle {
+            let label = makeLabel(windowTitle, size: titleFontSize, weight: .regular,
+                                  color: NSColor.white.withAlphaComponent(0.8),
+                                  maxWidth: maxTextWidth, wrap: wrap, maxLines: wrap ? 2 : 1)
+            pill.addSubview(label)
+            titleLabel = label
+        }
 
-            appNameLabel.leadingAnchor.constraint(equalTo: iconView.trailingAnchor, constant: 6),
-            appNameLabel.topAnchor.constraint(equalTo: pill.topAnchor, constant: 4),
-            appNameLabel.trailingAnchor.constraint(equalTo: pill.trailingAnchor, constant: -8),
+        // Measure.
+        let appSize = appLabel.intrinsicContentSize
+        let appHeight = min(appSize.height, wrap ? appFontSize * 2.6 : appFontSize * 1.4)
+        let appWidth = min(appSize.width, maxTextWidth)
 
-            titleLabel.leadingAnchor.constraint(equalTo: appNameLabel.leadingAnchor),
-            titleLabel.topAnchor.constraint(equalTo: appNameLabel.bottomAnchor, constant: 1),
-            titleLabel.trailingAnchor.constraint(equalTo: pill.trailingAnchor, constant: -8),
-            titleLabel.bottomAnchor.constraint(lessThanOrEqualTo: pill.bottomAnchor, constant: -4)
-        ])
+        var textWidth = appWidth
+        var textBlockHeight = appHeight
+        var titleHeight: CGFloat = 0
+        if let titleLabel {
+            let tSize = titleLabel.intrinsicContentSize
+            titleHeight = min(tSize.height, wrap ? titleFontSize * 2.6 : titleFontSize * 1.4)
+            textWidth = max(textWidth, min(tSize.width, maxTextWidth))
+            textBlockHeight += titleHeight + 1
+        }
+
+        let chipWidth = min(maxChipWidth, iconSize + hPad * 3 + spacing + textWidth)
+        let chipHeight = max(iconSize + vPad * 2, textBlockHeight + vPad * 2)
+
+        pill.frame = NSRect(x: inset, y: inset, width: chipWidth, height: chipHeight)
+        iconView.frame = NSRect(x: hPad, y: (chipHeight - iconSize) / 2, width: iconSize, height: iconSize)
+
+        let textX = hPad + iconSize + spacing
+        let textWidthFinal = max(10, chipWidth - textX - hPad)
+        if let titleLabel {
+            let topY = chipHeight - vPad - appHeight
+            appLabel.frame = NSRect(x: textX, y: topY, width: textWidthFinal, height: appHeight)
+            titleLabel.frame = NSRect(x: textX, y: topY - 1 - titleHeight, width: textWidthFinal, height: titleHeight)
+        } else {
+            appLabel.frame = NSRect(x: textX, y: (chipHeight - appHeight) / 2, width: textWidthFinal, height: appHeight)
+        }
     }
 
-    private func configureLabel(_ label: NSTextField, size: CGFloat, weight: NSFont.Weight, color: NSColor) {
+    private func makeLabel(_ text: String, size: CGFloat, weight: NSFont.Weight,
+                           color: NSColor, maxWidth: CGFloat, wrap: Bool, maxLines: Int) -> NSTextField {
+        let label = NSTextField(labelWithString: text)
         label.font = .systemFont(ofSize: size, weight: weight)
         label.textColor = color
-        label.lineBreakMode = .byTruncatingTail
-        label.translatesAutoresizingMaskIntoConstraints = false
+        label.maximumNumberOfLines = maxLines
+        label.lineBreakMode = wrap ? .byWordWrapping : .byTruncatingTail
+        label.preferredMaxLayoutWidth = maxWidth
+        label.cell?.wraps = wrap
+        label.cell?.isScrollable = !wrap
 
-        // Subtle shadow so text stays legible even if the pill sits over a
-        // bright thumbnail edge.
         let shadow = NSShadow()
         shadow.shadowColor = NSColor.black.withAlphaComponent(0.9)
         shadow.shadowBlurRadius = 2
         shadow.shadowOffset = NSSize(width: 0, height: -1)
         label.shadow = shadow
-    }
-
-    func configure(icon: NSImage?, appName: String, windowTitle: String) {
-        iconView.image = icon
-        appNameLabel.stringValue = appName
-        titleLabel.stringValue = (windowTitle == appName) ? "" : windowTitle
+        return label
     }
 }

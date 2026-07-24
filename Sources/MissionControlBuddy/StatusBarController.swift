@@ -4,6 +4,7 @@ import AppKit
 final class StatusBarController: NSObject {
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let enhancer: MissionControlEnhancer
+    private lazy var preferencesController = PreferencesWindowController()
 
     init(enhancer: MissionControlEnhancer) {
         self.enhancer = enhancer
@@ -27,13 +28,24 @@ final class StatusBarController: NSObject {
         toggleItem.target = self
         menu.addItem(toggleItem)
 
-        let statusItemLabel = NSMenuItem(
+        let statusLabel = NSMenuItem(
             title: enhancer.isEnabled ? "Status: watching Mission Control" : "Status: paused",
             action: nil,
             keyEquivalent: ""
         )
-        statusItemLabel.isEnabled = false
-        menu.addItem(statusItemLabel)
+        statusLabel.isEnabled = false
+        menu.addItem(statusLabel)
+
+        menu.addItem(NSMenuItem.separator())
+
+        let prefsItem = NSMenuItem(title: "Preferences…", action: #selector(showPreferences), keyEquivalent: ",")
+        prefsItem.target = self
+        menu.addItem(prefsItem)
+
+        let loginItem = NSMenuItem(title: "Launch at Login", action: #selector(toggleLaunchAtLogin), keyEquivalent: "")
+        loginItem.target = self
+        loginItem.state = LoginItem.isEnabled ? .on : .off
+        menu.addItem(loginItem)
 
         menu.addItem(NSMenuItem.separator())
 
@@ -53,6 +65,15 @@ final class StatusBarController: NSObject {
         rebuildMenu()
     }
 
+    @objc private func showPreferences() {
+        preferencesController.showAndFocus()
+    }
+
+    @objc private func toggleLaunchAtLogin() {
+        LoginItem.setEnabled(!LoginItem.isEnabled)
+        rebuildMenu()
+    }
+
     @objc private func showAbout() {
         let alert = NSAlert()
         alert.messageText = "Mission Control Buddy"
@@ -61,9 +82,6 @@ final class StatusBarController: NSObject {
         overlaying each window thumbnail with its app icon, app name, and window title.
 
         Requires Accessibility permission (System Settings → Privacy & Security → Accessibility).
-
-        Note: this relies on the Dock's Accessibility tree and floats overlays at a \
-        high window level. It's experimental and may need tweaks across macOS versions.
         """
         alert.addButton(withTitle: "OK")
         alert.runModal()

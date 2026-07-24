@@ -1,0 +1,154 @@
+import AppKit
+
+/// A simple programmatic preferences window: chip size, background color,
+/// opacity, long-text behavior, and launch-at-login.
+@MainActor
+final class PreferencesWindowController: NSWindowController {
+
+    private let prefs = PreferencesStore.shared
+
+    private let scaleSlider = NSSlider()
+    private let scaleValueLabel = NSTextField(labelWithString: "")
+    private let colorWell = NSColorWell()
+    private let opacitySlider = NSSlider()
+    private let opacityValueLabel = NSTextField(labelWithString: "")
+    private let longTextControl = NSSegmentedControl()
+    private let loginCheckbox = NSButton(checkboxWithTitle: "Launch at login", target: nil, action: nil)
+    private let loginNoteLabel = NSTextField(labelWithString: "")
+
+    convenience init() {
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 420, height: 320),
+            styleMask: [.titled, .closable],
+            backing: .buffered,
+            defer: false
+        )
+        window.title = "Mission Control Buddy — Preferences"
+        window.isReleasedWhenClosed = false
+        self.init(window: window)
+        buildUI()
+        loadValues()
+    }
+
+    func showAndFocus() {
+        loadValues()
+        window?.center()
+        NSApp.activate(ignoringOtherApps: true)
+        showWindow(nil)
+        window?.makeKeyAndOrderFront(nil)
+    }
+
+    // MARK: - UI
+
+    private func buildUI() {
+        guard let content = window?.contentView else { return }
+
+        scaleSlider.minValue = 0.6
+        scaleSlider.maxValue = 1.8
+        scaleSlider.target = self
+        scaleSlider.action = #selector(scaleChanged)
+
+        opacitySlider.minValue = 0.0
+        opacitySlider.maxValue = 1.0
+        opacitySlider.target = self
+        opacitySlider.action = #selector(opacityChanged)
+
+        colorWell.target = self
+        colorWell.action = #selector(colorChanged)
+
+        longTextControl.segmentCount = LongTextBehavior.allCases.count
+        for (i, behavior) in LongTextBehavior.allCases.enumerated() {
+            longTextControl.setLabel(behavior.displayName, forSegment: i)
+            longTextControl.setWidth(120, forSegment: i)
+        }
+        longTextControl.target = self
+        longTextControl.action = #selector(longTextChanged)
+
+        loginCheckbox.target = self
+        loginCheckbox.action = #selector(loginToggled)
+
+        loginNoteLabel.font = .systemFont(ofSize: 10)
+        loginNoteLabel.textColor = .secondaryLabelColor
+        loginNoteLabel.stringValue = "Works only when running the built .app (see README)."
+
+        let grid = NSGridView(views: [
+            [label("Chip size:"), sliderRow(scaleSlider, scaleValueLabel)],
+            [label("Background:"), colorWell],
+            [label("Opacity:"), sliderRow(opacitySlider, opacityValueLabel)],
+            [label("Long text:"), longTextControl],
+            [label("Startup:"), loginCheckbox],
+            [NSGridCell.emptyContentView, loginNoteLabel]
+        ])
+        grid.translatesAutoresizingMaskIntoConstraints = false
+        grid.columnSpacing = 12
+        grid.rowSpacing = 14
+        grid.column(at: 0).xPlacement = .trailing
+        content.addSubview(grid)
+
+        NSLayoutConstraint.activate([
+            grid.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 24),
+            grid.trailingAnchor.constraint(lessThanOrEqualTo: content.trailingAnchor, constant: -24),
+            grid.topAnchor.constraint(equalTo: content.topAnchor, constant: 24)
+        ])
+    }
+
+    private func label(_ text: String) -> NSTextField {
+        NSTextField(labelWithString: text)
+    }
+
+    private func sliderRow(_ slider: NSSlider, _ valueLabel: NSTextField) -> NSView {
+        valueLabel.alignment = .right
+        valueLabel.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
+        valueLabel.textColor = .secondaryLabelColor
+        let stack = NSStackView(views: [slider, valueLabel])
+        stack.orientation = .horizontal
+        stack.spacing = 8
+        slider.widthAnchor.constraint(equalToConstant: 220).isActive = true
+        valueLabel.widthAnchor.constraint(equalToConstant: 44).isActive = true
+        return stack
+    }
+
+    // MARK: - Load / actions
+
+    private func loadValues() {
+        scaleSlider.doubleValue = prefs.chipScale
+        scaleValueLabel.stringValue = String(format: "%.0f%%", prefs.chipScale * 100)
+        opacitySlider.doubleValue = prefs.backgroundOpacity
+        opacityValueLabel.stringValue = String(format: "%.0f%%", prefs.backgroundOpacity * 100)
+        colorWell.color = NSColor(hex: prefs.backgroundHex) ?? .black
+        if let index = LongTextBehavior.allCases.firstIndex(of: prefs.longTextBehavior) {
+            longTextControl.selectedSegment = index
+        }
+        loginCheckbox.state = LoginItem.isEnabled ? .on : .off
+    }
+
+    @objc private func scaleChanged() {
+        prefs.chipScale = scaleSlider.doubleValue
+        scaleValueLabel.stringValue = String(format: "%.0f%%", prefs.chipScale * 100)
+    }
+
+    @objc private func opacityChanged() {
+        prefs.backgroundOpacity = opacitySlider.doubleValue
+        opacityValueLabel.stringValue = String(format: "%.0f%%", prefs.backgroundOpacity * 100)
+    }
+
+    @objc private func colorChanged() {
+        prefs.backgroundHex = colorWell.color.hexString
+    }
+
+    @objc private func longTextChanged() {
+        let index = longTextControl.selectedSegment
+        guard index >= 0, index < LongTextBehavior.allCases.count else { return }
+        prefs.longTextBehavior = LongTextBehavior.allCases[index]
+    }
+
+    @objc private func loginToggled() {
+        let wantEnabled = loginCheckbox.state == .on
+        let success = LoginItem.setEnabled(wantEnabled)
+        if !success {
+            loginCheckbox.state = LoginItem.isEnabled ? .on : .off
+            loginNoteLabel.stringValue = "Couldn't change login item — run the built .app (see README)."
+            loginNoteLabel.textColor = .systemRed
+        }
+    }
+}

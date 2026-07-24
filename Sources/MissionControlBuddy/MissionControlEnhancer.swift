@@ -34,6 +34,12 @@ final class MissionControlEnhancer {
 
     func start() {
         guard pollTimer == nil else { return }
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(preferencesChanged),
+            name: PreferencesStore.changedNotification,
+            object: nil
+        )
         // 60ms (~16Hz): responsive without hammering the Dock AX bridge.
         pollTimer = Timer.scheduledTimer(
             timeInterval: 0.06,
@@ -55,6 +61,11 @@ final class MissionControlEnhancer {
         if !enabled {
             hideAllOverlays()
         }
+    }
+
+    @objc private func preferencesChanged() {
+        // Force a restyle on the next render by resetting the layout signature.
+        lastLayoutSignature = nil
     }
 
     // MARK: - Polling
@@ -192,6 +203,7 @@ final class MissionControlEnhancer {
     // MARK: - Rendering (reuses pooled windows)
 
     private func render(_ thumbnails: [Thumbnail]) {
+        let style = ChipStyle.current()
         for (index, thumbnail) in thumbnails.enumerated() {
             guard let cocoaFrame = cocoaFrame(from: thumbnail.axFrame) else { continue }
 
@@ -199,7 +211,7 @@ final class MissionControlEnhancer {
             let resolved = iconResolver.resolve(title: thumbnail.title)
 
             overlay.setFrameIfNeeded(cocoaFrame)
-            overlay.updateIfNeeded(icon: resolved.icon, appName: resolved.appName, windowTitle: thumbnail.title)
+            overlay.updateIfNeeded(icon: resolved.icon, appName: resolved.appName, windowTitle: thumbnail.title, style: style)
             if !overlay.isVisible {
                 overlay.orderFrontRegardless()
             }
