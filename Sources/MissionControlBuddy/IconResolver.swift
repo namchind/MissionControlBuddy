@@ -39,14 +39,33 @@ struct IconResolver {
             for window in windows {
                 let title = DockAXReader.title(window)
                 if !title.isEmpty {
-                    titleToApp[title] = app
+                    // Avoid title collisions across apps (rare but real).
+                    // Keep the first mapping we see so it doesn't randomly flip.
+                    if titleToApp[title] == nil {
+                        titleToApp[title] = app
+                    }
                 }
             }
         }
     }
 
     /// Resolve a thumbnail title to an app icon + name.
-    func resolve(title: String) -> Resolved {
+    /// - Parameter appHint: optional app-name hint from the Dock AX element
+    ///   (often more reliable than the window title for browsers like Chrome).
+    func resolve(title: String, appHint: String?) -> Resolved {
+        // 0. If the Dock gives us an app hint, trust it first.
+        if let appHint {
+            if let app = appNameToApp[appHint] {
+                return Resolved(appName: app.localizedName ?? appHint, icon: app.icon)
+            }
+            // Fuzzy match (e.g. hint might be "Chrome" vs app name "Google Chrome").
+            if let match = appNameToApp.first(where: { name, _ in
+                name.localizedCaseInsensitiveContains(appHint) || appHint.localizedCaseInsensitiveContains(name)
+            }) {
+                return Resolved(appName: match.key, icon: match.value.icon)
+            }
+        }
+
         // 1. Exact window-title match.
         if let app = titleToApp[title] {
             return Resolved(appName: app.localizedName ?? title, icon: app.icon)
@@ -72,12 +91,9 @@ struct IconResolver {
             return Resolved(appName: app.localizedName ?? title, icon: app.icon)
         }
 
-        // 4. Substring fallback: any app name contained in the title.
-        for (name, app) in appNameToApp where title.localizedCaseInsensitiveContains(name) {
-            return Resolved(appName: name, icon: app.icon)
-        }
-
-        // 5. Give up on the icon, keep the title as the name.
+        // 4. Give up on the icon, keep the title as the name.
+        // We intentionally DO NOT do a substring match (it mis-classifies browser
+        // tabs like "Visual Studio Code FAQ" as the VS Code app).
         return Resolved(appName: title, icon: nil)
     }
 }

@@ -18,6 +18,9 @@ final class MissionControlEnhancer {
     private var iconResolver = IconResolver()
     private var isShowingOverlays = false
 
+    private var suppressedUntilMCClosed = false
+    private var mouseMonitor: Any?
+
     private(set) var isEnabled = true
 
     // MARK: - Lifecycle
@@ -55,7 +58,14 @@ final class MissionControlEnhancer {
         // Fast path: if MC isn't open, hide everything immediately. This is the
         // cheap top-level check, so teardown feels instant.
         guard DockAXReader.isMissionControlOpen() else {
+            if suppressedUntilMCClosed { suppressedUntilMCClosed = false }
             if isShowingOverlays { hideAllOverlays() }
+            return
+        }
+
+        // If the user just selected a window in MC, we suppress re-drawing until
+        // Mission Control actually closes (prevents the "one last draw" glitch).
+        if suppressedUntilMCClosed {
             return
         }
 
@@ -67,6 +77,7 @@ final class MissionControlEnhancer {
         if !isShowingOverlays {
             iconResolver.refresh()   // rebuild icon lookup once per activation
             isShowingOverlays = true
+            installSelectionMonitor()
         }
 
         render(thumbnails)
@@ -79,7 +90,7 @@ final class MissionControlEnhancer {
             guard let cocoaFrame = cocoaFrame(from: thumbnail.axFrame) else { continue }
 
             let overlay = overlay(at: index)
-            let resolved = iconResolver.resolve(title: thumbnail.title)
+            let resolved = iconResolver.resolve(title: thumbnail.title, appHint: thumbnail.appHint)
 
             overlay.setFrameIfNeeded(cocoaFrame)
             overlay.updateIfNeeded(icon: resolved.icon, appName: resolved.appName, windowTitle: thumbnail.title)
@@ -113,6 +124,29 @@ final class MissionControlEnhancer {
         }
         activeCount = 0
         isShowingOverlays = false
+        removeSelectionMonitor()
+    }
+
+    private func installSelectionMonitor() {
+        guard mouseMonitor == nil else { return }
+        // Any click while Mission Control is open usually means "select a window".
+        // Hide immediately so overlays never linger over the chosen app.
+        mouseMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]) { [weak self] _ in
+            Task { @MainActor in
+                guard let self else { return }
+                if self.isShowingOverlays {
+                    self.suppressedUntilMCClosed = true
+                    self.hideAllOverlays()
+                }
+            }
+        }
+    }
+
+    private func removeSelectionMonitor() {
+        if let mouseMonitor {
+            NSEvent.removeMonitor(mouseMonitor)
+            self.mouseMonitor = nil
+        }
     }
 
     // MARK: - Coordinate conversion
