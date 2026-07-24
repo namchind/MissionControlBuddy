@@ -102,26 +102,30 @@ struct IconResolver {
         Resolved(appName: app.localizedName ?? fallbackName, icon: app.icon)
     }
 
-    /// Match a middle-truncated title (containing "…") against a real window
-    /// title by requiring the real title to start with the prefix and end with
-    /// the suffix around the ellipsis.
+    /// Match a middle-truncated title (containing "\u{2026}") against a real window
+    /// title. The prefix (before the ellipsis) must anchor at the START of the
+    /// real title; the suffix (after the ellipsis) must appear SOMEWHERE after
+    /// it. We use `contains` for the suffix rather than `hasSuffix` because some
+    /// apps append extra text to their AX window title that Mission Control's
+    /// thumbnail title omits — e.g. Chrome adds " - Google Chrome - <profile>".
     private func matchTruncated(_ truncated: String) -> NSRunningApplication? {
-        guard let ellipsisIndex = truncated.firstIndex(of: Self.ellipsis) else {
-            return nil
-        }
+        guard truncated.contains(Self.ellipsis) else { return nil }
 
-        let prefix = String(truncated[..<ellipsisIndex])
-        let suffix = String(truncated[truncated.index(after: ellipsisIndex)...])
+        // Split on every ellipsis; the first segment is the prefix, the last is
+        // the suffix (handles rare multi-ellipsis titles too).
+        let segments = truncated
+            .split(separator: Self.ellipsis, omittingEmptySubsequences: false)
+            .map(String.init)
+        guard let prefix = segments.first, let suffix = segments.last else { return nil }
 
         // Guard against too-loose matches (very short prefix + suffix).
         guard prefix.count + suffix.count >= 6 else { return nil }
 
         for entry in windows {
             let realTitle = entry.title
-            // The real title must be at least as long as the visible characters.
-            guard realTitle.count >= prefix.count + suffix.count else { continue }
+            guard realTitle.count >= prefix.count else { continue }
             if (prefix.isEmpty || realTitle.hasPrefix(prefix)),
-               (suffix.isEmpty || realTitle.hasSuffix(suffix)) {
+               (suffix.isEmpty || realTitle.contains(suffix)) {
                 return entry.app
             }
         }
