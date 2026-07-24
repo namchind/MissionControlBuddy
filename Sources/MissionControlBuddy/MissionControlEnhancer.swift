@@ -115,7 +115,7 @@ final class MissionControlEnhancer {
             guard let cocoaFrame = cocoaFrame(from: thumbnail.axFrame) else { continue }
 
             let overlay = overlay(at: index)
-            let resolved = iconResolver.resolve(title: thumbnail.title, appHint: thumbnail.appHint)
+            let resolved = iconResolver.resolve(title: thumbnail.title)
 
             overlay.setFrameIfNeeded(cocoaFrame)
             overlay.updateIfNeeded(icon: resolved.icon, appName: resolved.appName, windowTitle: thumbnail.title)

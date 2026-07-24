@@ -4,8 +4,6 @@ import ApplicationServices
 /// A single Mission Control thumbnail as exposed by the Dock's Accessibility tree.
 struct Thumbnail {
     let title: String
-    /// Optional hint about the owning app. Often available via kAXDescription/kAXHelp.
-    let appHint: String?
     /// Frame in AX/global coordinates (top-left origin, y grows downward).
     let axFrame: CGRect
 }
@@ -39,14 +37,6 @@ enum DockAXReader {
 
     static func title(_ element: AXUIElement) -> String {
         string(element, kAXTitleAttribute as String) ?? ""
-    }
-
-    static func description(_ element: AXUIElement) -> String? {
-        let desc = string(element, kAXDescriptionAttribute as String)
-        if let desc, !desc.isEmpty { return desc }
-        let help = string(element, kAXHelpAttribute as String)
-        if let help, !help.isEmpty { return help }
-        return nil
     }
 
     static func frame(_ element: AXUIElement) -> CGRect? {
@@ -124,8 +114,7 @@ enum DockAXReader {
                !childTitle.isEmpty,
                let f = frame(child),
                f.width > 60, f.height > 40 {
-                let hint = description(child)
-                results.append(Thumbnail(title: childTitle, appHint: hint, axFrame: f))
+                results.append(Thumbnail(title: childTitle, axFrame: f))
             }
 
             collectThumbnails(from: child, into: &results, depth: depth + 1)
