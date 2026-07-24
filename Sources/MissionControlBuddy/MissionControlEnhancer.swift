@@ -120,8 +120,13 @@ final class MissionControlEnhancer {
 
     /// A cheap fingerprint of the current thumbnail layout (titles + frames).
     private func layoutSignature(_ thumbnails: [Thumbnail]) -> String {
-        thumbnails
-            .map { "\($0.title)@\(Int($0.axFrame.origin.x)),\(Int($0.axFrame.origin.y)),\(Int($0.axFrame.width)),\(Int($0.axFrame.height))" }
+        func q(_ value: CGFloat) -> Int {
+            // Quantize to 8px buckets so tiny AX jitter doesn't reset stability.
+            Int((value / 8.0).rounded())
+        }
+
+        return thumbnails
+            .map { "\($0.title)@\(q($0.axFrame.origin.x)),\(q($0.axFrame.origin.y)),\(q($0.axFrame.width)),\(q($0.axFrame.height))" }
             .joined(separator: "|")
     }
 
@@ -152,8 +157,12 @@ final class MissionControlEnhancer {
             return false
         }
 
-        // The bottom-left "pile" symptom: bbox hugs the bottom-left corner.
-        if bbox.minX < 80 && bbox.minY < 160 {
+        // The bottom-left "pile" symptom: ONLY reject when layout is both
+        // corner-hugging and tightly clustered (small bbox). A valid full MC
+        // grid can still begin near the left/bottom edges.
+        let cornerHugging = bbox.minX < 80 && bbox.minY < 160
+        let clustered = bbox.width < (screenRect.width * 0.55) && bbox.height < (screenRect.height * 0.55)
+        if cornerHugging && clustered {
             return false
         }
 
