@@ -3,11 +3,18 @@ import ApplicationServices
 
 /// Watches for native Mission Control activation and overlays app icon + name
 /// (+ window title) chips on each thumbnail.
+///
+/// Performance design:
+///  * A pool of overlay windows is REUSED across frames (no create/destroy
+///    churn — that was the source of the left-edge flicker and teardown lag).
+///  * A cheap "is MC open?" check runs every tick for instant teardown.
+///  * Overlays only move/redraw when their frame or content actually changes.
 @MainActor
 final class MissionControlEnhancer {
 
     private var pollTimer: Timer?
-    private var overlays: [ThumbnailOverlayWindow] = []
+    private var overlayPool: [ThumbnailOverlayWindow] = []
+    private var activeCount = 0
     private var iconResolver = IconResolver()
     private var isShowingOverlays = false
 
@@ -17,8 +24,9 @@ final class MissionControlEnhancer {
 
     func start() {
         guard pollTimer == nil else { return }
+        // 60ms (~16Hz): responsive without hammering the Dock AX bridge.
         pollTimer = Timer.scheduledTimer(
-            timeInterval: 0.15,
+            timeInterval: 0.06,
             target: self,
             selector: #selector(poll),
             userInfo: nil,
@@ -29,13 +37,13 @@ final class MissionControlEnhancer {
     func stop() {
         pollTimer?.invalidate()
         pollTimer = nil
-        tearDownOverlays()
+        hideAllOverlays()
     }
 
     func setEnabled(_ enabled: Bool) {
         isEnabled = enabled
         if !enabled {
-            tearDownOverlays()
+            hideAllOverlays()
         }
     }
 
@@ -44,47 +52,67 @@ final class MissionControlEnhancer {
     @objc private func poll() {
         guard isEnabled else { return }
 
+        // Fast path: if MC isn't open, hide everything immediately. This is the
+        // cheap top-level check, so teardown feels instant.
+        guard DockAXReader.isMissionControlOpen() else {
+            if isShowingOverlays { hideAllOverlays() }
+            return
+        }
+
         guard let thumbnails = DockAXReader.currentThumbnails(), !thumbnails.isEmpty else {
-            // Mission Control is closed (or empty) → clear overlays.
-            if isShowingOverlays { tearDownOverlays() }
+            if isShowingOverlays { hideAllOverlays() }
             return
         }
 
         if !isShowingOverlays {
-            // Fresh activation: rebuild the icon lookup once.
-            iconResolver.refresh()
+            iconResolver.refresh()   // rebuild icon lookup once per activation
             isShowingOverlays = true
         }
 
         render(thumbnails)
     }
 
-    // MARK: - Rendering
+    // MARK: - Rendering (reuses pooled windows)
 
     private func render(_ thumbnails: [Thumbnail]) {
-        // Recreate overlays each frame — cheap for a handful of windows, and
-        // keeps rects in sync as MC animates thumbnails into place.
-        tearDownOverlays(keepFlag: true)
-
-        for thumbnail in thumbnails {
+        for (index, thumbnail) in thumbnails.enumerated() {
             guard let cocoaFrame = cocoaFrame(from: thumbnail.axFrame) else { continue }
 
+            let overlay = overlay(at: index)
             let resolved = iconResolver.resolve(title: thumbnail.title)
-            let overlay = ThumbnailOverlayWindow(cocoaFrame: cocoaFrame)
-            overlay.update(icon: resolved.icon, appName: resolved.appName, windowTitle: thumbnail.title)
-            overlay.orderFrontRegardless()
-            overlays.append(overlay)
+
+            overlay.setFrameIfNeeded(cocoaFrame)
+            overlay.updateIfNeeded(icon: resolved.icon, appName: resolved.appName, windowTitle: thumbnail.title)
+            if !overlay.isVisible {
+                overlay.orderFrontRegardless()
+            }
         }
+
+    // Hide any leftover overlays from a previous frame with more thumbnails.
+        if thumbnails.count < activeCount {
+            for index in thumbnails.count..<activeCount {
+                overlayPool[index].orderOut(nil)
+            }
+        }
+        activeCount = thumbnails.count
     }
 
-    private func tearDownOverlays(keepFlag: Bool = false) {
-        for overlay in overlays {
+    /// Returns a pooled overlay window, creating one lazily if needed.
+    private func overlay(at index: Int) -> ThumbnailOverlayWindow {
+        if index < overlayPool.count {
+            return overlayPool[index]
+        }
+        let overlay = ThumbnailOverlayWindow()
+        overlayPool.append(overlay)
+        return overlay
+    }
+
+    private func hideAllOverlays() {
+        for overlay in overlayPool where overlay.isVisible {
             overlay.orderOut(nil)
         }
-        overlays.removeAll(keepingCapacity: true)
-        if !keepFlag {
-            isShowingOverlays = false
-        }
+        activeCount = 0
+        isShowingOverlays = false
     }
 
     // MARK: - Coordinate conversion
@@ -95,8 +123,7 @@ final class MissionControlEnhancer {
         let primary = NSScreen.screens.first(where: { $0.frame.origin == .zero }) ?? NSScreen.main
         guard let primaryScreen = primary else { return nil }
 
-        let primaryMaxY = primaryScreen.frame.maxY
-        let cocoaY = primaryMaxY - axFrame.origin.y - axFrame.height
+        let cocoaY = primaryScreen.frame.maxY - axFrame.origin.y - axFrame.height
         return NSRect(x: axFrame.origin.x, y: cocoaY, width: axFrame.width, height: axFrame.height)
     }
 }

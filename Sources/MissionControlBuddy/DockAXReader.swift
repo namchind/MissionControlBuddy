@@ -76,6 +76,14 @@ enum DockAXReader {
         return nil
     }
 
+    /// Cheap check: is Mission Control currently open? Only inspects the Dock's
+    /// top-level children (no deep tree walk), so it's fast enough to call often
+    /// for instant teardown detection.
+    static func isMissionControlOpen() -> Bool {
+        guard let dock = dockElement() else { return false }
+        return missionControlGroup(in: dock) != nil
+    }
+
     /// Reads all thumbnail buttons under the Mission Control group.
     /// Returns nil when Mission Control is not open.
     static func currentThumbnails() -> [Thumbnail]? {
