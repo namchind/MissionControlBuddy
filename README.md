@@ -7,7 +7,8 @@ title** — so you can find the window you want at a glance.
 This is **not** a Mission Control clone. It watches for the real, Apple-provided
 Mission Control and draws labels on top of the actual thumbnails.
 
-![concept](https://support.apple.com/library/content/dam/edam/applecare/images/en_US/macos/Big-Sur/macos-big-sur-mission-control.jpg)
+
+Download: <https://github.com/namchind/MissionControlBuddy/releases/download/1.0.0/MissionControlBuddy-v1.0.0.zip>
 
 ---
 
