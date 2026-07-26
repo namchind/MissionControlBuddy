@@ -8,7 +8,7 @@ This is **not** a Mission Control clone. It watches for the real, Apple-provided
 Mission Control and draws labels on top of the actual thumbnails.
 
 
-Download: <https://github.com/namchind/MissionControlBuddy/releases/download/1.0.0/MissionControlBuddy-v1.0.0.zip>
+Download: <https://github.com/namchind/MissionControlBuddy/releases/download/1.0.0/MissionControlBuddy-v1.0.0-Installer.dmg>
 
 ---
 
