@@ -4,12 +4,18 @@ import AppKit
 final class StatusBarController: NSObject {
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let enhancer: MissionControlEnhancer
-    private lazy var preferencesController = PreferencesWindowController()
+    private let showPreferences: () -> Void
 
-    init(enhancer: MissionControlEnhancer) {
+    init(enhancer: MissionControlEnhancer, showPreferences: @escaping () -> Void) {
         self.enhancer = enhancer
+        self.showPreferences = showPreferences
         super.init()
         setupStatusBarButton()
+    }
+
+    var isVisible: Bool {
+        get { statusItem.isVisible }
+        set { statusItem.isVisible = newValue }
     }
 
     private func setupStatusBarButton() {
@@ -20,7 +26,7 @@ final class StatusBarController: NSObject {
         rebuildMenu()
     }
 
-    private func rebuildMenu() {
+    func rebuildMenu() {
         let menu = NSMenu()
 
         let toggleTitle = enhancer.isEnabled ? "Disable Overlays" : "Enable Overlays"
@@ -38,7 +44,7 @@ final class StatusBarController: NSObject {
 
         menu.addItem(NSMenuItem.separator())
 
-        let prefsItem = NSMenuItem(title: "Preferences…", action: #selector(showPreferences), keyEquivalent: ",")
+        let prefsItem = NSMenuItem(title: "Preferences…", action: #selector(openPreferences), keyEquivalent: ",")
         prefsItem.target = self
         menu.addItem(prefsItem)
 
@@ -46,6 +52,10 @@ final class StatusBarController: NSObject {
         loginItem.target = self
         loginItem.state = LoginItem.isEnabled ? .on : .off
         menu.addItem(loginItem)
+
+        let hideIconItem = NSMenuItem(title: "Hide Menu Bar Icon", action: #selector(hideMenuBarIcon), keyEquivalent: "")
+        hideIconItem.target = self
+        menu.addItem(hideIconItem)
 
         menu.addItem(NSMenuItem.separator())
 
@@ -65,13 +75,19 @@ final class StatusBarController: NSObject {
         rebuildMenu()
     }
 
-    @objc private func showPreferences() {
-        preferencesController.showAndFocus()
+    @objc private func openPreferences() {
+        showPreferences()
     }
 
     @objc private func toggleLaunchAtLogin() {
         LoginItem.setEnabled(!LoginItem.isEnabled)
         rebuildMenu()
+    }
+
+    @objc private func hideMenuBarIcon() {
+        PreferencesStore.shared.showMenuBarIcon = false
+        statusItem.isVisible = false
+        showPreferences()
     }
 
     @objc private func showAbout() {

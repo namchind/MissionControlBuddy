@@ -1,12 +1,18 @@
 import AppKit
 
-/// A simple programmatic preferences window: chip size, background color,
-/// opacity, long-text behavior, and launch-at-login.
+/// A simple programmatic preferences window.
 @MainActor
 final class PreferencesWindowController: NSWindowController {
 
     private let prefs = PreferencesStore.shared
 
+    // Callbacks supplied by AppDelegate.
+    var overlayEnabledProvider: (() -> Bool)?
+    var setOverlayEnabled: ((Bool) -> Void)?
+    var quitHandler: (() -> Void)?
+    var menuIconVisibilityChanged: ((Bool) -> Void)?
+
+    private let overlaysCheckbox = NSButton(checkboxWithTitle: "Enable overlays", target: nil, action: nil)
     private let scaleSlider = NSSlider()
     private let scaleValueLabel = NSTextField(labelWithString: "")
     private let colorWell = NSColorWell()
@@ -14,11 +20,12 @@ final class PreferencesWindowController: NSWindowController {
     private let opacityValueLabel = NSTextField(labelWithString: "")
     private let longTextControl = NSSegmentedControl()
     private let loginCheckbox = NSButton(checkboxWithTitle: "Launch at login", target: nil, action: nil)
+    private let menuIconCheckbox = NSButton(checkboxWithTitle: "Show menu bar icon", target: nil, action: nil)
     private let loginNoteLabel = NSTextField(labelWithString: "")
 
     convenience init() {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 420, height: 360),
+            contentRect: NSRect(x: 0, y: 0, width: 460, height: 430),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
@@ -42,6 +49,9 @@ final class PreferencesWindowController: NSWindowController {
 
     private func buildUI() {
         guard let content = window?.contentView else { return }
+
+        overlaysCheckbox.target = self
+        overlaysCheckbox.action = #selector(overlaysToggled)
 
         scaleSlider.minValue = 0.6
         scaleSlider.maxValue = 1.8
@@ -67,16 +77,21 @@ final class PreferencesWindowController: NSWindowController {
         loginCheckbox.target = self
         loginCheckbox.action = #selector(loginToggled)
 
+        menuIconCheckbox.target = self
+        menuIconCheckbox.action = #selector(menuIconToggled)
+
         loginNoteLabel.font = .systemFont(ofSize: 10)
         loginNoteLabel.textColor = .secondaryLabelColor
-        loginNoteLabel.stringValue = "Works only when running the built .app (see README)."
+        loginNoteLabel.stringValue = "Launch at login works only when running the built .app (not swift run)."
 
         let grid = NSGridView(views: [
+            [label("Runtime:"), overlaysCheckbox],
             [label("Chip size:"), sliderRow(scaleSlider, scaleValueLabel)],
             [label("Background:"), colorWell],
             [label("Opacity:"), sliderRow(opacitySlider, opacityValueLabel)],
             [label("Long text:"), longTextControl],
             [label("Startup:"), loginCheckbox],
+            [label("UI:"), menuIconCheckbox],
             [NSGridCell.emptyContentView, loginNoteLabel]
         ])
         grid.translatesAutoresizingMaskIntoConstraints = false
@@ -85,20 +100,26 @@ final class PreferencesWindowController: NSWindowController {
         grid.column(at: 0).xPlacement = .trailing
         content.addSubview(grid)
 
-        NSLayoutConstraint.activate([
-            grid.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 24),
-            grid.trailingAnchor.constraint(lessThanOrEqualTo: content.trailingAnchor, constant: -24),
-            grid.topAnchor.constraint(equalTo: content.topAnchor, constant: 24)
-        ])
-
         let resetButton = NSButton(title: "Restore Defaults", target: self, action: #selector(resetToDefaults))
         resetButton.bezelStyle = .rounded
         resetButton.translatesAutoresizingMaskIntoConstraints = false
         content.addSubview(resetButton)
 
+        let quitButton = NSButton(title: "Quit MissionControlBuddy", target: self, action: #selector(quitApp))
+        quitButton.bezelStyle = .rounded
+        quitButton.translatesAutoresizingMaskIntoConstraints = false
+        content.addSubview(quitButton)
+
         NSLayoutConstraint.activate([
+            grid.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 24),
+            grid.trailingAnchor.constraint(lessThanOrEqualTo: content.trailingAnchor, constant: -24),
+            grid.topAnchor.constraint(equalTo: content.topAnchor, constant: 24),
+
             resetButton.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 24),
-            resetButton.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -18)
+            resetButton.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -18),
+
+            quitButton.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -24),
+            quitButton.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -18)
         ])
     }
 
@@ -121,6 +142,7 @@ final class PreferencesWindowController: NSWindowController {
     // MARK: - Load / actions
 
     private func loadValues() {
+        overlaysCheckbox.state = (overlayEnabledProvider?() ?? true) ? .on : .off
         scaleSlider.doubleValue = prefs.chipScale
         scaleValueLabel.stringValue = String(format: "%.0f%%", prefs.chipScale * 100)
         opacitySlider.doubleValue = prefs.backgroundOpacity
@@ -130,6 +152,11 @@ final class PreferencesWindowController: NSWindowController {
             longTextControl.selectedSegment = index
         }
         loginCheckbox.state = LoginItem.isEnabled ? .on : .off
+        menuIconCheckbox.state = prefs.showMenuBarIcon ? .on : .off
+    }
+
+    @objc private func overlaysToggled() {
+        setOverlayEnabled?(overlaysCheckbox.state == .on)
     }
 
     @objc private func scaleChanged() {
@@ -162,8 +189,20 @@ final class PreferencesWindowController: NSWindowController {
         }
     }
 
+    @objc private func menuIconToggled() {
+        let visible = menuIconCheckbox.state == .on
+        prefs.showMenuBarIcon = visible
+        menuIconVisibilityChanged?(visible)
+    }
+
     @objc private func resetToDefaults() {
         prefs.resetToDefaults()
         loadValues()
+        setOverlayEnabled?(true)
+        menuIconVisibilityChanged?(prefs.showMenuBarIcon)
+    }
+
+    @objc private func quitApp() {
+        quitHandler?()
     }
 }

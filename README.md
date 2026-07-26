@@ -74,7 +74,11 @@ mode — use Option A for that.
   - **Enable / Disable Overlays**
   - **Preferences…** (⌘,)
   - **Launch at Login**
+  - **Hide Menu Bar Icon**
   - **About**, **Quit**
+
+If you hide the menu bar icon, open MissionControlBuddy again from Spotlight /
+Applications to bring back the **Preferences** window (control surface).
 
 ### Preferences
 
@@ -84,8 +88,11 @@ mode — use Option A for that.
 | **Background** | Chip background color (color picker) |
 | **Opacity** | Chip background opacity (0–100%) |
 | **Long text** | `Cut with …` (truncate) or `Wrap (2 lines)` |
+| **Enable overlays** | Runtime on/off switch for Mission Control chips |
 | **Launch at login** | Start automatically at login (app bundle only) |
+| **Show menu bar icon** | Show/hide status item; when hidden, relaunch app to open Preferences |
 | **Restore Defaults** | Reset all settings back to defaults |
+| **Quit button** | Stop the app even when menu bar icon is hidden |
 
 Changes apply live to the next Mission Control open.
 

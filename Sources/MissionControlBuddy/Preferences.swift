@@ -30,6 +30,7 @@ final class PreferencesStore {
         static let backgroundHex = "chipBackgroundHex"
         static let backgroundOpacity = "chipBackgroundOpacity"
         static let longText = "chipLongTextBehavior"
+        static let showMenuBarIcon = "showMenuBarIcon"
     }
 
     private init() {
@@ -37,7 +38,8 @@ final class PreferencesStore {
             Key.chipScale: 1.0,
             Key.backgroundHex: "#000000",
             Key.backgroundOpacity: 0.72,
-            Key.longText: LongTextBehavior.truncate.rawValue
+            Key.longText: LongTextBehavior.truncate.rawValue,
+            Key.showMenuBarIcon: true
         ])
     }
 
@@ -70,9 +72,15 @@ final class PreferencesStore {
         (NSColor(hex: backgroundHex) ?? .black).withAlphaComponent(CGFloat(backgroundOpacity))
     }
 
+    /// Show the menu bar icon when true.
+    var showMenuBarIcon: Bool {
+        get { defaults.bool(forKey: Key.showMenuBarIcon) }
+        set { set(newValue, forKey: Key.showMenuBarIcon) }
+    }
+
     /// Restore every setting to its default value.
     func resetToDefaults() {
-        for key in [Key.chipScale, Key.backgroundHex, Key.backgroundOpacity, Key.longText] {
+        for key in [Key.chipScale, Key.backgroundHex, Key.backgroundOpacity, Key.longText, Key.showMenuBarIcon] {
             defaults.removeObject(forKey: key)
         }
         NotificationCenter.default.post(name: Self.changedNotification, object: nil)
