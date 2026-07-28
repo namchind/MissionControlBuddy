@@ -18,6 +18,18 @@ enum AppInfo {
 
     static var displayName: String { "Mission Control Buddy" }
 
+    /// The app icon, loaded from the bundle's AppIcon resource. Accessory
+    /// (LSUIElement) apps don't get one set automatically, so we load it
+    /// explicitly and reuse it for the app icon, About panel, and Preferences.
+    static var icon: NSImage? {
+        if let named = NSImage(named: "AppIcon") { return named }
+        if let url = Bundle.main.url(forResource: "AppIcon", withExtension: "icns"),
+           let image = NSImage(contentsOf: url) {
+            return image
+        }
+        return nil
+    }
+
     /// Shows the shared About dialog. Called from both the status-bar menu and
     /// the Preferences window.
     static func presentAbout() {
@@ -29,9 +41,7 @@ enum AppInfo {
 
         Requires Accessibility permission (System Settings → Privacy & Security → Accessibility).
         """
-        if let icon = NSApp.applicationIconImage {
-            alert.icon = icon
-        }
+        if let icon { alert.icon = icon }
         alert.addButton(withTitle: "OK")
         NSApp.activate(ignoringOtherApps: true)
         alert.runModal()

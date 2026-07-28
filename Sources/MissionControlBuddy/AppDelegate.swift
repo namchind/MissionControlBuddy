@@ -8,6 +8,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let preferencesController = PreferencesWindowController()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Accessory apps don't get an app icon automatically; set it so it shows
+        // in About panels, ⌘-Tab, and anywhere AppKit asks for the app icon.
+        if let icon = AppInfo.icon {
+            NSApp.applicationIconImage = icon
+        }
+
         ensureAccessibilityPermission()
 
         preferencesController.overlayEnabledProvider = { [weak self] in

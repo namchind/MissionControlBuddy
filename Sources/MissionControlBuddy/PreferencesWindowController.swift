@@ -25,7 +25,7 @@ final class PreferencesWindowController: NSWindowController {
 
     convenience init() {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 460, height: 430),
+            contentRect: NSRect(x: 0, y: 0, width: 460, height: 500),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
@@ -49,6 +49,25 @@ final class PreferencesWindowController: NSWindowController {
 
     private func buildUI() {
         guard let content = window?.contentView else { return }
+
+        // Header: app icon + name + version (fittingly, an icon app shows its icon).
+        let iconView = NSImageView()
+        iconView.image = AppInfo.icon
+        iconView.imageScaling = .scaleProportionallyUpOrDown
+        iconView.translatesAutoresizingMaskIntoConstraints = false
+        content.addSubview(iconView)
+
+        let titleLabel = NSTextField(labelWithString: AppInfo.displayName)
+        titleLabel.font = .systemFont(ofSize: 15, weight: .semibold)
+        let versionLabel = NSTextField(labelWithString: "Version \(AppInfo.version)")
+        versionLabel.font = .systemFont(ofSize: 11)
+        versionLabel.textColor = .secondaryLabelColor
+        let titleStack = NSStackView(views: [titleLabel, versionLabel])
+        titleStack.orientation = .vertical
+        titleStack.alignment = .leading
+        titleStack.spacing = 2
+        titleStack.translatesAutoresizingMaskIntoConstraints = false
+        content.addSubview(titleStack)
 
         overlaysCheckbox.target = self
         overlaysCheckbox.action = #selector(overlaysToggled)
@@ -123,9 +142,17 @@ final class PreferencesWindowController: NSWindowController {
         content.addSubview(doneButton)
 
         NSLayoutConstraint.activate([
+            iconView.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 24),
+            iconView.topAnchor.constraint(equalTo: content.topAnchor, constant: 20),
+            iconView.widthAnchor.constraint(equalToConstant: 48),
+            iconView.heightAnchor.constraint(equalToConstant: 48),
+
+            titleStack.leadingAnchor.constraint(equalTo: iconView.trailingAnchor, constant: 12),
+            titleStack.centerYAnchor.constraint(equalTo: iconView.centerYAnchor),
+
             grid.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 24),
             grid.trailingAnchor.constraint(lessThanOrEqualTo: content.trailingAnchor, constant: -24),
-            grid.topAnchor.constraint(equalTo: content.topAnchor, constant: 24),
+            grid.topAnchor.constraint(equalTo: iconView.bottomAnchor, constant: 20),
 
             resetButton.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 24),
             resetButton.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -18),
