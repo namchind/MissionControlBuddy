@@ -8,7 +8,7 @@ This is **not** a Mission Control clone. It watches for the real, Apple-provided
 Mission Control and draws labels on top of the actual thumbnails.
 
 
-Download: <https://github.com/namchind/MissionControlBuddy/releases/download/1.0.0/MissionControlBuddy-v1.0.0-Installer.dmg>
+Download: <https://github.com/namchind/MissionControlBuddy/releases/download/1.0.1/MissionControlBuddy-v1.0.1-Installer.dmg>
 
 ---
 
@@ -149,3 +149,40 @@ So the app:
 | `build_app.sh` | Builds/install the `.app` bundle |
 | `make_icon.swift` | Generates `Resources/AppIcon.icns` |
 | `*Probe.swift` | Diagnostics used to reverse-engineer MC |
+
+---
+
+## Release Notes
+
+### 1.0.1
+
+- **TablePlus / untitled windows now get chips**  
+  Mission Control thumbnails whose AX button has an empty title (e.g. some
+  TablePlus windows) are no longer ignored. We now:
+  - keep empty-title thumbnail buttons in the Dock AX reader, and
+  - resolve their owning app by matching the thumbnail's aspect ratio against
+    real app windows via Accessibility.
+  Result: even title-less windows get a proper app icon + name chip.
+
+- **Preferences window chip shows the correct icon**  
+  `IconResolver.refresh()` now includes our own process even though it's a
+  `.accessory` app (menu bar utility), so the Mission Control thumbnail for the
+  **MissionControlBuddy Preferences** window shows the MissionControlBuddy app
+  icon instead of being blank.
+
+- **Single-instance behavior**  
+  On launch, MissionControlBuddy now detects and terminates any older running
+  instance (by bundle identifier / executable), so you never end up with two
+  menu bar puppies fighting over Mission Control.
+
+- **Clearer Close vs Quit in Preferences**  
+  The bottom-right buttons are now:
+  - **Close (keep running)** — green checkmark; closes Preferences only.
+  - **Quit App** — red x-mark; terminates MissionControlBuddy entirely.  
+  This makes "keep running" vs "actually quit" visually obvious.
+
+### 1.0.0
+
+- Initial public release.
+- Mission Control thumbnail chips with app icon + name + window title.
+- Preferences UI, launch-at-login support, and basic stability heuristics.
