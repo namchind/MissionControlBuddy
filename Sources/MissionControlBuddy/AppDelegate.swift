@@ -8,6 +8,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let preferencesController = PreferencesWindowController()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Single-instance policy: the newest launch wins. Terminate any other
+        // copies already running so we cleanly override the old process.
+        terminateOtherInstances()
+
         // Accessory apps don't get an app icon automatically; set it so it shows
         // in About panels, ⌘-Tab, and anywhere AppKit asks for the app icon.
         if let icon = AppInfo.icon {
@@ -64,6 +68,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func preferencesChanged() {
         statusBarController?.isVisible = PreferencesStore.shared.showMenuBarIcon
         statusBarController?.rebuildMenu()
+    }
+
+    /// Enforces a single running instance: kills every other copy of this app
+    /// so the newest launch takes over. Matches by bundle identifier when
+    /// available (the .app), falling back to the executable URL for `swift run`.
+    private func terminateOtherInstances() {
+        let me = NSRunningApplication.current
+        let others: [NSRunningApplication]
+
+        if let bundleID = Bundle.main.bundleIdentifier {
+            others = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID)
+                .filter { $0.processIdentifier != me.processIdentifier }
+        } else {
+            let myURL = me.executableURL
+            others = NSWorkspace.shared.runningApplications.filter {
+                $0.processIdentifier != me.processIdentifier && $0.executableURL == myURL
+            }
+        }
+
+        guard !others.isEmpty else { return }
+
+        for app in others {
+            if !app.terminate() {   // ask nicely first
+                app.forceTerminate() // then insist
+            }
+        }
+
+        // Give the OS a brief moment to release the old status item / resources.
+        let deadline = Date().addingTimeInterval(2.0)
+        while others.contains(where: { !$0.isTerminated }) && Date() < deadline {
+            RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+        }
     }
 
     /// Prompts for Accessibility permission if not already granted. The Dock AX
