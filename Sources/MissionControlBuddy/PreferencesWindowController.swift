@@ -115,6 +115,13 @@ final class PreferencesWindowController: NSWindowController {
         aboutButton.translatesAutoresizingMaskIntoConstraints = false
         content.addSubview(aboutButton)
 
+        // Closes the window but leaves the app running in the menu bar.
+        let doneButton = NSButton(title: "Done", target: self, action: #selector(closeWindow))
+        doneButton.bezelStyle = .rounded
+        doneButton.keyEquivalent = "\r" // Return activates it
+        doneButton.translatesAutoresizingMaskIntoConstraints = false
+        content.addSubview(doneButton)
+
         NSLayoutConstraint.activate([
             grid.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 24),
             grid.trailingAnchor.constraint(lessThanOrEqualTo: content.trailingAnchor, constant: -24),
@@ -123,11 +130,14 @@ final class PreferencesWindowController: NSWindowController {
             resetButton.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 24),
             resetButton.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -18),
 
-            aboutButton.centerXAnchor.constraint(equalTo: content.centerXAnchor),
+            aboutButton.leadingAnchor.constraint(equalTo: resetButton.trailingAnchor, constant: 12),
             aboutButton.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -18),
 
             quitButton.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -24),
-            quitButton.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -18)
+            quitButton.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -18),
+
+            doneButton.trailingAnchor.constraint(equalTo: quitButton.leadingAnchor, constant: -12),
+            doneButton.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -18)
         ])
     }
 
@@ -216,5 +226,10 @@ final class PreferencesWindowController: NSWindowController {
 
     @objc private func showAbout() {
         AppInfo.presentAbout()
+    }
+
+    /// Closes the Preferences window; the app keeps running in the menu bar.
+    @objc private func closeWindow() {
+        window?.close()
     }
 }
