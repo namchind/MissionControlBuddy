@@ -122,16 +122,22 @@ final class PreferencesWindowController: NSWindowController {
         let resetButton = NSButton(title: "Restore Defaults", target: self, action: #selector(resetToDefaults))
         resetButton.bezelStyle = .rounded
 
-        let quitButton = NSButton(title: "Quit", target: self, action: #selector(quitApp))
+        let quitButton = NSButton(title: "Quit App", target: self, action: #selector(quitApp))
         quitButton.bezelStyle = .rounded
+        quitButton.image = NSImage(systemSymbolName: "xmark.circle.fill", accessibilityDescription: "Quit Mission Control Buddy")
+        quitButton.imagePosition = .imageLeading
+        quitButton.contentTintColor = .systemRed
 
         let aboutButton = NSButton(title: "About", target: self, action: #selector(showAbout))
         aboutButton.bezelStyle = .rounded
 
         // Closes the window but leaves the app running in the menu bar.
-        let doneButton = NSButton(title: "Done", target: self, action: #selector(closeWindow))
-        doneButton.bezelStyle = .rounded
-        doneButton.keyEquivalent = "\r" // Return activates it
+        let keepRunningButton = NSButton(title: "Close (keep running)", target: self, action: #selector(closeWindow))
+        keepRunningButton.bezelStyle = .rounded
+        keepRunningButton.keyEquivalent = "\r" // Return activates it
+        keepRunningButton.image = NSImage(systemSymbolName: "checkmark.circle.fill", accessibilityDescription: "Close preferences and keep running")
+        keepRunningButton.imagePosition = .imageLeading
+        keepRunningButton.contentTintColor = .systemGreen
 
         // Left group (secondary actions) and right group (window actions),
         // in a single row that stretches edge-to-edge so nothing overlaps.
@@ -139,7 +145,7 @@ final class PreferencesWindowController: NSWindowController {
         leftGroup.orientation = .horizontal
         leftGroup.spacing = 10
 
-        let rightGroup = NSStackView(views: [doneButton, quitButton])
+        let rightGroup = NSStackView(views: [keepRunningButton, quitButton])
         rightGroup.orientation = .horizontal
         rightGroup.spacing = 10
 

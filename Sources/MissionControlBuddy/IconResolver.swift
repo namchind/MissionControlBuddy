@@ -44,8 +44,14 @@ struct IconResolver {
         windows.removeAll(keepingCapacity: true)
         claimedWindowIndices.removeAll(keepingCapacity: true)
 
-        let apps = NSWorkspace.shared.runningApplications.filter {
-            $0.activationPolicy == .regular
+        let current = NSRunningApplication.current
+        let apps = NSWorkspace.shared.runningApplications.filter { app in
+            // Regular apps always participate; additionally include OUR
+            // background/accessory app so its Preferences window chip gets an
+            // icon too.
+            if app.activationPolicy == .regular { return true }
+            if app.processIdentifier == current.processIdentifier { return true }
+            return false
         }
 
         for app in apps {
