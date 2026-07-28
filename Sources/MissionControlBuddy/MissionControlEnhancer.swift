@@ -204,11 +204,13 @@ final class MissionControlEnhancer {
 
     private func render(_ thumbnails: [Thumbnail]) {
         let style = ChipStyle.current()
+        iconResolver.beginPass()   // reset per-frame window claims
         for (index, thumbnail) in thumbnails.enumerated() {
             guard let cocoaFrame = cocoaFrame(from: thumbnail.axFrame) else { continue }
 
             let overlay = overlay(at: index)
-            let resolved = iconResolver.resolve(title: thumbnail.title)
+            let aspect = thumbnail.axFrame.height > 0 ? thumbnail.axFrame.width / thumbnail.axFrame.height : 0
+            let resolved = iconResolver.resolve(title: thumbnail.title, aspect: aspect)
 
             overlay.setFrameIfNeeded(cocoaFrame)
             overlay.updateIfNeeded(icon: resolved.icon, appName: resolved.appName, windowTitle: thumbnail.title, style: style)

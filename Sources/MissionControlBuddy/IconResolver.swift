@@ -20,11 +20,18 @@ struct IconResolver {
     private struct WindowEntry {
         let title: String
         let app: NSRunningApplication
+        /// width / height of the real AX window. Used to recover the identity of
+        /// title-less thumbnails (e.g. TablePlus) via aspect-ratio matching,
+        /// since Mission Control scales each space uniformly.
+        let aspect: CGFloat
     }
 
     private var titleToApp: [String: NSRunningApplication] = [:]
     private var appNameToApp: [String: NSRunningApplication] = [:]
     private var windows: [WindowEntry] = []
+    /// Indices into `windows` already claimed during the current render pass, so
+    /// two thumbnails never resolve to the same physical window.
+    private var claimedWindowIndices: Set<Int> = []
 
     /// The character macOS uses for truncation (U+2026 HORIZONTAL ELLIPSIS).
     private static let ellipsis: Character = "\u{2026}"
@@ -35,6 +42,7 @@ struct IconResolver {
         titleToApp.removeAll(keepingCapacity: true)
         appNameToApp.removeAll(keepingCapacity: true)
         windows.removeAll(keepingCapacity: true)
+        claimedWindowIndices.removeAll(keepingCapacity: true)
 
         let apps = NSWorkspace.shared.runningApplications.filter {
             $0.activationPolicy == .regular
@@ -52,19 +60,45 @@ struct IconResolver {
 
             for window in axWindows {
                 let title = DockAXReader.title(window)
-                guard !title.isEmpty else { continue }
-                windows.append(WindowEntry(title: title, app: app))
-                if titleToApp[title] == nil {
+                let aspect = aspectRatio(of: window)
+                // Keep EVERY window (even title-less ones) for geometry matching.
+                windows.append(WindowEntry(title: title, app: app, aspect: aspect))
+                if !title.isEmpty, titleToApp[title] == nil {
                     titleToApp[title] = app   // keep first mapping; avoid random flips
                 }
             }
         }
     }
 
+    /// Reset per-pass claim tracking. Call once before resolving the batch of
+    /// thumbnails for a single Mission Control frame.
+    mutating func beginPass() {
+        claimedWindowIndices.removeAll(keepingCapacity: true)
+    }
+
+    /// width / height of an AX window, or 0 when unavailable.
+    private func aspectRatio(of window: AXUIElement) -> CGFloat {
+        guard let f = DockAXReader.frame(window), f.height > 0 else { return 0 }
+        return f.width / f.height
+    }
+
     /// Resolve a thumbnail title to an app icon + name.
-    func resolve(title: String) -> Resolved {
+    ///
+    /// `aspect` is the thumbnail's width/height, used to recover the identity of
+    /// title-less windows (Mission Control scales each space uniformly, so the
+    /// thumbnail aspect ratio matches the real window's).
+    mutating func resolve(title: String, aspect: CGFloat = 0) -> Resolved {
+        // Title-less thumbnail (e.g. TablePlus): match purely by geometry.
+        if title.isEmpty {
+            if let app = claimClosestWindow(aspect: aspect) {
+                return resolved(app, fallbackName: app.localizedName ?? "")
+            }
+            return Resolved(appName: "", icon: nil)
+        }
+
         // 1. Exact window-title match (works for non-truncated titles).
         if let app = titleToApp[title] {
+            claimWindow(matching: title)
             return resolved(app, fallbackName: title)
         }
 
@@ -107,6 +141,39 @@ struct IconResolver {
     }
 
     // MARK: - Helpers
+
+    /// Claim the first unclaimed window whose title matches, so a subsequent
+    /// title-less thumbnail won't steal its identity via geometry.
+    private mutating func claimWindow(matching title: String) {
+        for (index, entry) in windows.enumerated()
+        where !claimedWindowIndices.contains(index) && entry.title == title {
+            claimedWindowIndices.insert(index)
+            return
+        }
+    }
+
+    /// Find (and claim) the unclaimed window whose aspect ratio is closest to
+    /// the thumbnail's. Returns nil when nothing is close enough.
+    private mutating func claimClosestWindow(aspect: CGFloat) -> NSRunningApplication? {
+        guard aspect > 0 else { return nil }
+
+        var bestIndex: Int?
+        var bestDelta = CGFloat.greatestFiniteMagnitude
+        for (index, entry) in windows.enumerated() {
+            guard !claimedWindowIndices.contains(index), entry.aspect > 0 else { continue }
+            let delta = abs(entry.aspect - aspect)
+            if delta < bestDelta {
+                bestDelta = delta
+                bestIndex = index
+            }
+        }
+
+        // Require a reasonably tight match (±8% of the aspect ratio). Uniform
+        // MC scaling preserves aspect, so a loose match means "not this window".
+        guard let bestIndex, bestDelta <= aspect * 0.08 else { return nil }
+        claimedWindowIndices.insert(bestIndex)
+        return windows[bestIndex].app
+    }
 
     private func resolved(_ app: NSRunningApplication, fallbackName: String) -> Resolved {
         Resolved(appName: app.localizedName ?? fallbackName, icon: app.icon)

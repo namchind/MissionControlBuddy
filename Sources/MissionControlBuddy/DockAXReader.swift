@@ -96,8 +96,13 @@ enum DockAXReader {
     }
 
     /// Recursively walks the MC subtree, collecting window thumbnails.
-    /// Window thumbnails are AXButtons with a non-empty title, excluding the
-    /// Spaces Bar desktop buttons ("Desktop 1", etc.) which live in a sibling group.
+    ///
+    /// Window thumbnails are AXButtons living inside a space's content group.
+    /// We deliberately KEEP empty-title buttons: some apps (e.g. TablePlus)
+    /// expose windows with an empty AXTitle, and those still deserve a chip —
+    /// their identity is recovered later via geometry matching. We still exclude:
+    ///  * the Spaces Bar group ("Desktop 1/2/…" plus the add-desktop chrome),
+    ///  * anything with a negative Y origin (off-screen chrome sits above 0).
     private static func collectThumbnails(from element: AXUIElement, into results: inout [Thumbnail], depth: Int) {
         if depth > 10 { return }
 
@@ -105,14 +110,14 @@ enum DockAXReader {
             let childRole = role(child)
             let childTitle = title(child)
 
-            // Skip the Spaces Bar group entirely (Desktop 1/2/…).
+            // Skip the Spaces Bar group entirely (Desktop 1/2/… + add-desktop button).
             if childRole == kAXGroupRole as String, childTitle == "Spaces Bar" {
                 continue
             }
 
             if childRole == kAXButtonRole as String,
-               !childTitle.isEmpty,
                let f = frame(child),
+               f.minY >= 0,
                f.width > 60, f.height > 40 {
                 results.append(Thumbnail(title: childTitle, axFrame: f))
             }
