@@ -95,7 +95,7 @@ func dumpInteresting(_ windows: [RawWindow], header: String) {
 
 // ---- main loop -------------------------------------------------------------
 
-print("MissionControlProbe running. Trigger Mission Control (Control+Up or swipe up).")
+print("MissionControlProbe running. Trigger Mission Control (Control+Up or three finger swipe up).")
 print("Watching for population changes… Ctrl+C to stop.\n")
 
 var lastDockCount = -1

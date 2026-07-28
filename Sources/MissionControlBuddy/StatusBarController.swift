@@ -91,24 +91,7 @@ final class StatusBarController: NSObject {
     }
 
     @objc private func showAbout() {
-        let alert = NSAlert()
-        alert.messageText = "Mission Control Buddy \(Self.appVersion)"
-        alert.informativeText = """
-        Enhances the native macOS Mission Control (Control+Up / swipe up) by \
-        overlaying each window thumbnail with its app icon, app name, and window title.
-
-        Requires Accessibility permission (System Settings → Privacy & Security → Accessibility).
-        """
-        alert.addButton(withTitle: "OK")
-        alert.runModal()
-    }
-
-    /// App version string, e.g. "v1.0.1". Reads CFBundleShortVersionString from
-    /// the bundle (single source of truth in Info.plist); falls back gracefully
-    /// when running the bare binary via `swift run`.
-    static var appVersion: String {
-        let short = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
-        return "v\(short ?? "dev")"
+        AppInfo.presentAbout()
     }
 
     @objc private func quit() {

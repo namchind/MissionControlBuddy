@@ -110,6 +110,11 @@ final class PreferencesWindowController: NSWindowController {
         quitButton.translatesAutoresizingMaskIntoConstraints = false
         content.addSubview(quitButton)
 
+        let aboutButton = NSButton(title: "About", target: self, action: #selector(showAbout))
+        aboutButton.bezelStyle = .rounded
+        aboutButton.translatesAutoresizingMaskIntoConstraints = false
+        content.addSubview(aboutButton)
+
         NSLayoutConstraint.activate([
             grid.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 24),
             grid.trailingAnchor.constraint(lessThanOrEqualTo: content.trailingAnchor, constant: -24),
@@ -117,6 +122,9 @@ final class PreferencesWindowController: NSWindowController {
 
             resetButton.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 24),
             resetButton.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -18),
+
+            aboutButton.centerXAnchor.constraint(equalTo: content.centerXAnchor),
+            aboutButton.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -18),
 
             quitButton.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -24),
             quitButton.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -18)
@@ -204,5 +212,9 @@ final class PreferencesWindowController: NSWindowController {
 
     @objc private func quitApp() {
         quitHandler?()
+    }
+
+    @objc private func showAbout() {
+        AppInfo.presentAbout()
     }
 }

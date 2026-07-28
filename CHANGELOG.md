@@ -26,7 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Initial release: a menu bar utility that enhances the native macOS Mission
-  Control (Control+Up / swipe up) by overlaying each window thumbnail with its
+  Control (Control+Up / three finger swipe up) by overlaying each window thumbnail with its
   **app icon, app name, and window title**.
 - Icon + name + title overlays driven by the Dock's Accessibility tree.
 - Ellipsis-aware title matching (handles Mission Control's middle-truncated and

@@ -1,6 +1,6 @@
 # MissionControlBuddy
 
-**Enhances the *native* macOS Mission Control** (Control+Up / swipe up) by
+**Enhances the *native* macOS Mission Control** (Control+Up / three finger swipe up) by
 overlaying each window thumbnail with its **app icon, app name, and window
 title** — so you can find the window you want at a glance.
 
@@ -49,7 +49,7 @@ Then:
    System Settings → Privacy & Security → Accessibility → enable
    **MissionControlBuddy**.
 3. Quit and relaunch once so the permission takes effect.
-4. Trigger Mission Control (Control+Up or swipe up) — the chips appear. 🎉
+4. Trigger Mission Control (Control+Up or three finger swipe up) — the chips appear. 🎉
 
 To build the app without installing, just run `./build_app.sh`
 (output lands in `dist/MissionControlBuddy.app`).
