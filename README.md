@@ -154,6 +154,18 @@ So the app:
 
 ## Release Notes
 
+### 1.0.2
+
+- **Fixed: secondary-monitor windows had no chips**  
+  Regression from 1.0.1. The empty-title fix added a `minY >= 0` guard to the
+  Dock AX reader to drop off-screen chrome. But on a multi-monitor setup, any
+  display placed **above/left** of the primary reports thumbnails at **negative**
+  AX coordinates — so that guard silently discarded every window on secondary
+  monitors. The guard was also redundant: the add-desktop button lives *inside*
+  the `"Spaces Bar"` group, which we already skip. Removed the guard; all
+  monitors get chips again. (Coordinate flip already anchors to the primary
+  screen, so negative AX Y maps correctly across displays.)
+
 ### 1.0.1
 
 - **TablePlus / untitled windows now get chips**  

@@ -100,9 +100,12 @@ enum DockAXReader {
     /// Window thumbnails are AXButtons living inside a space's content group.
     /// We deliberately KEEP empty-title buttons: some apps (e.g. TablePlus)
     /// expose windows with an empty AXTitle, and those still deserve a chip —
-    /// their identity is recovered later via geometry matching. We still exclude:
-    ///  * the Spaces Bar group ("Desktop 1/2/…" plus the add-desktop chrome),
-    ///  * anything with a negative Y origin (off-screen chrome sits above 0).
+    /// their identity is recovered later via geometry matching.
+    ///
+    /// We exclude the Spaces Bar group ("Desktop 1/2/…" plus the add-desktop
+    /// chrome button, which is a CHILD of that group). We must NOT filter on Y
+    /// origin: thumbnails on a secondary monitor placed above/left of the
+    /// primary have negative AX coordinates and are perfectly valid.
     private static func collectThumbnails(from element: AXUIElement, into results: inout [Thumbnail], depth: Int) {
         if depth > 10 { return }
 
@@ -117,7 +120,6 @@ enum DockAXReader {
 
             if childRole == kAXButtonRole as String,
                let f = frame(child),
-               f.minY >= 0,
                f.width > 60, f.height > 40 {
                 results.append(Thumbnail(title: childTitle, axFrame: f))
             }
